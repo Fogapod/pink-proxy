@@ -6,12 +6,14 @@ use serde::Serialize;
 
 #[derive(Serialize)]
 struct JsonError {
-    //status: u16,
+    // causes a lot of code duplication (logical)
+    status: u16,
     message: String,
 }
 
 #[derive(Debug)]
 pub enum ServiceError {
+    NotFound,
     InternalServerError,
     BadRequest(String),
 }
@@ -19,10 +21,11 @@ pub enum ServiceError {
 impl fmt::Display for ServiceError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ServiceError::InternalServerError => {
+            Self::InternalServerError => {
                 write!(f, "InternalServerError")
             }
-            ServiceError::BadRequest(_) => write!(f, "BadRequest"),
+            Self::BadRequest(_) => write!(f, "BadRequest"),
+            Self::NotFound => write!(f, "NotFound"),
         }
     }
 }
@@ -30,13 +33,17 @@ impl fmt::Display for ServiceError {
 impl ResponseError for ServiceError {
     fn error_response(&self) -> HttpResponse {
         match self {
-            ServiceError::InternalServerError => {
-                HttpResponse::InternalServerError().json(JsonError {
-                    message: "Internal Server Error".into(),
-                })
-            }
-            ServiceError::BadRequest(message) => HttpResponse::BadRequest().json(JsonError {
+            Self::InternalServerError => HttpResponse::InternalServerError().json(JsonError {
+                status: 500,
+                message: "Internal Server Error".into(),
+            }),
+            Self::BadRequest(message) => HttpResponse::BadRequest().json(JsonError {
+                status: 400,
                 message: message.into(),
+            }),
+            Self::NotFound => HttpResponse::NotFound().json(JsonError {
+                status: 404,
+                message: "Resource not found".into(),
             }),
         }
     }

@@ -2,3 +2,5 @@ target
 
 .dockerignore
 Dockerfile
+
+*.env
