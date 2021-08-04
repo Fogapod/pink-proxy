@@ -1,50 +1,43 @@
-use std::fmt;
-
-use actix_web::{error::ResponseError, HttpResponse};
+use actix_web::{error::ResponseError, http::StatusCode, HttpResponse, HttpResponseBuilder};
 
 use serde::Serialize;
 
+use derive_more::{Display, Error};
+
 #[derive(Serialize)]
 struct JsonError {
-    // causes a lot of code duplication (logical)
     status: u16,
     message: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Display, Error)]
 pub enum ServiceError {
+    #[display(fmt = "not found")]
     NotFound,
-    InternalServerError,
-    BadRequest(String),
-}
 
-impl fmt::Display for ServiceError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::InternalServerError => {
-                write!(f, "InternalServerError")
-            }
-            Self::BadRequest(_) => write!(f, "BadRequest"),
-            Self::NotFound => write!(f, "NotFound"),
-        }
-    }
+    #[allow(dead_code)]
+    #[display(fmt = "internal error")]
+    InternalServerError,
+
+    #[display(fmt = "bad request: {}", message)]
+    BadRequest { message: String },
 }
 
 impl ResponseError for ServiceError {
-    fn error_response(&self) -> HttpResponse {
+    fn status_code(&self) -> StatusCode {
         match self {
-            Self::InternalServerError => HttpResponse::InternalServerError().json(JsonError {
-                status: 500,
-                message: "Internal Server Error".into(),
-            }),
-            Self::BadRequest(message) => HttpResponse::BadRequest().json(JsonError {
-                status: 400,
-                message: message.into(),
-            }),
-            Self::NotFound => HttpResponse::NotFound().json(JsonError {
-                status: 404,
-                message: "Resource not found".into(),
-            }),
+            Self::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::BadRequest { .. } => StatusCode::BAD_REQUEST,
+            Self::NotFound => StatusCode::NOT_FOUND,
         }
+    }
+
+    fn error_response(&self) -> HttpResponse {
+        let status = self.status_code();
+
+        HttpResponseBuilder::new(status).json(JsonError {
+            status: status.as_u16(),
+            message: self.to_string(),
+        })
     }
 }

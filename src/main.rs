@@ -1,17 +1,18 @@
-use actix_web::ResponseError;
+mod errors;
+
 use std::collections::HashMap;
-use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use tokio::time;
+use tokio::{sync::Mutex, time};
 
-use actix_web::{get, middleware::Logger, post, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{get, post};
+use actix_web::{middleware, web, App, Error, HttpResponse, HttpServer, Responder, ResponseError};
 
 use serde::{Deserialize, Serialize};
 
 use uuid::Uuid;
 
-mod errors;
+use errors::ServiceError;
 
 const IGNORED_HEADERS: &[awc::http::HeaderName] = &[
     awc::http::header::CONTENT_LENGTH,
@@ -37,24 +38,19 @@ struct Proxy {
 }
 
 #[derive(Debug)]
-struct State {
-    proxies: Mutex<HashMap<Uuid, Proxy>>,
-}
+struct Proxies(Mutex<HashMap<Uuid, Proxy>>);
 
 #[post("")]
 async fn post_proxy(
     data: web::Json<ProxyURL>,
-    state: web::Data<State>,
-) -> Result<impl Responder, errors::ServiceError> {
+    proxies: web::Data<Proxies>,
+) -> Result<impl Responder, Error> {
     let ProxyURL { url, ttl } = data.into_inner();
 
     let id = Uuid::new_v4();
 
     {
-        let mut proxies = state
-            .proxies
-            .lock()
-            .map_err(|_| errors::ServiceError::InternalServerError {})?;
+        let mut proxies = proxies.0.lock().await;
         proxies.insert(
             id,
             Proxy {
@@ -70,37 +66,41 @@ async fn post_proxy(
 #[get("{id}")]
 async fn get_proxy(
     path: web::Path<Uuid>,
-    state: web::Data<State>,
+    proxies: web::Data<Proxies>,
     client: web::Data<awc::Client>,
-) -> Result<impl Responder, errors::ServiceError> {
+) -> Result<impl Responder, Error> {
     let id = path.into_inner();
 
-    let proxy = state
-        .proxies
-        .lock()
-        .map_err(|_| errors::ServiceError::InternalServerError {})?
-        .get(&id)
-        .cloned()
-        .ok_or_else(|| errors::ServiceError::BadRequest("bad id".into()))?;
+    let proxy =
+        proxies
+            .0
+            .lock()
+            .await
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| ServiceError::BadRequest {
+                message: "bad id".into(),
+            })?;
 
-    let request = client.get(proxy.url);
+    let request = client.get(proxy.url).send().await.map_err(|e| {
+        log::error!("remote request creation failed: {}", e);
 
-    let remote_response = request
-        .send()
-        .await
-        .map_err(|e| errors::ServiceError::BadRequest(format!("request failed: {}", e)))?;
+        ServiceError::BadRequest {
+            message: "request failed".into(),
+        }
+    })?;
 
-    let mut response = HttpResponse::build(remote_response.status());
+    let mut response = HttpResponse::build(request.status());
 
-    remote_response.headers().iter().for_each(|(k, v)| {
+    for (k, v) in request.headers() {
         // O(nm), though there are only 2 ignored headers now, so overhead is not big
         if !IGNORED_HEADERS.contains(k) {
             response.insert_header((k, v.clone()));
         }
-    });
+    }
 
     // TODO: stop if body too large?
-    Ok(response.streaming(remote_response))
+    Ok(response.streaming(request))
 }
 
 #[actix_rt::main]
@@ -120,26 +120,32 @@ async fn main() -> std::io::Result<()> {
         },
     ));
 
-    let state = web::Data::new(State {
-        proxies: Mutex::new(HashMap::new()),
-    });
+    let proxies = web::Data::new(Proxies(Mutex::new(HashMap::new())));
 
     // avoid move to server
-    let cloned_state = state.clone();
+    let cloned_proxies = proxies.clone();
 
     let server = HttpServer::new(move || {
-        let logger = Logger::default();
+        let logger = middleware::Logger::default();
 
         let json_config = web::JsonConfig::default()
             .limit(4096)
-            .error_handler(|err, _req| {
-                dbg!(&err);
-                errors::ServiceError::BadRequest(err.to_string()).into()
+            .error_handler(|e, _rq| {
+                log::debug!("json: {}", e);
+
+                ServiceError::BadRequest {
+                    message: e.to_string(),
+                }
+                .into()
             });
 
-        let path_config = web::PathConfig::default().error_handler(|err, _req| {
-            dbg!(&err);
-            errors::ServiceError::BadRequest(err.to_string()).into()
+        let path_config = web::PathConfig::default().error_handler(|e, _rq| {
+            log::debug!("path: {}", e);
+
+            ServiceError::BadRequest {
+                message: e.to_string(),
+            }
+            .into()
         });
 
         App::new()
@@ -153,9 +159,9 @@ async fn main() -> std::io::Result<()> {
                     .wrap(awc::middleware::Redirect::new().max_redirect_times(10))
                     .finish(),
             ))
-            .app_data(cloned_state.clone())
+            .app_data(cloned_proxies.clone())
             .service(web::scope("/proxy").service(post_proxy).service(get_proxy))
-            .default_service(web::route().to(|| errors::ServiceError::NotFound {}.error_response()))
+            .default_service(web::route().to(|| ServiceError::NotFound {}.error_response()))
     })
     .bind("0.0.0.0:8000")?
     .run();
@@ -169,9 +175,7 @@ async fn main() -> std::io::Result<()> {
 
             let now = Instant::now();
 
-            // if this panics, task dies, but app continues to process requests which
-            // might not be desired. sentry does not capture this as well
-            let mut proxies = state.proxies.lock().expect("task failed to unlock proxies");
+            let mut proxies = proxies.0.lock().await;
 
             // this is O(n) which is very very very bad, need to maintain a separate
             // sorted set of valid instants probably

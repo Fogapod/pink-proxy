@@ -1070,6 +1070,7 @@ dependencies = [
  "actix-rt",
  "actix-web",
  "awc",
+ "derive_more",
  "dotenv",
  "env_logger",
  "log",
