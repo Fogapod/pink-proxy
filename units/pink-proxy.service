@@ -22,5 +22,5 @@ ExecStartPre=/bin/sh -c "podman build -t $IMAGE ."
 ExecStartPre=-/usr/bin/podman stop %n
 ExecStartPre=-/usr/bin/podman rm %n
 
-ExecStart=/usr/bin/podman run --name %n --rm \
+ExecStart=/usr/bin/podman run --name %n --rm -p 8000:8000 \
     ${PWD}/.env:/usr/src/pink-proxy/.env:U --hostname pink_proxy_prod $IMAGE
