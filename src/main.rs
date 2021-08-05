@@ -31,7 +31,6 @@ struct ProxyURL {
 #[derive(Serialize)]
 struct ProxyID {
     id: Uuid,
-    ttl: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -78,10 +77,16 @@ async fn post_proxy(
     rq: HttpRequest,
     data: web::Json<ProxyURL>,
     proxies: web::Data<Proxies>,
-) -> Result<impl Responder, Error> {
+) -> Result<impl Responder, ServiceError> {
     authorize(&rq)?;
 
     let ProxyURL { url, ttl } = data.into_inner();
+
+    if !(60..=3600).contains(&ttl) {
+        return Err(ServiceError::BadRequest {
+            message: "ttl should be between 60 and 3600".into(),
+        });
+    }
 
     let id = Uuid::new_v4();
 
@@ -96,7 +101,7 @@ async fn post_proxy(
         );
     }
 
-    Ok(HttpResponse::Ok().json(ProxyID { id, ttl }))
+    Ok(HttpResponse::Ok().json(ProxyID { id }))
 }
 
 #[get("{id}")]
