@@ -64,7 +64,7 @@ fn authorize(rq: &HttpRequest) -> Result<(), ServiceError> {
     // TODO: is it expensive? move to state?
     let master_token = std::env::var("ACCESS_TOKEN").expect("ACCESS_TOKEN not set");
 
-    if constant_time_eq(token.as_bytes(), master_token.as_bytes()) {
+    if !constant_time_eq(token.as_bytes(), master_token.as_bytes()) {
         return Err(ServiceError::Unauthorized {
             message: "bad token".into(),
         });
