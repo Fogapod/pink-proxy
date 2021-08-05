@@ -207,7 +207,6 @@ async fn main() -> std::io::Result<()> {
     .bind("0.0.0.0:8000")?
     .run();
 
-    // proxy cleanup task
     actix_rt::spawn(async move {
         let mut interval = time::interval(Duration::from_secs(60));
 
