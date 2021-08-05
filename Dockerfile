@@ -12,6 +12,7 @@ RUN apt update && apt install -y --no-install-recommends \
 FROM rust:1.54-slim
 COPY --from=builder /usr/local/cargo/bin/pink-proxy /usr/local/bin/pink-proxy
 
+WORKDIR /usr/src/pink-proxy
 # TODO: user
 
 EXPOSE 8000
