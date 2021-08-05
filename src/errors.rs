@@ -21,6 +21,9 @@ pub enum ServiceError {
 
     #[display(fmt = "bad request: {}", message)]
     BadRequest { message: String },
+
+    #[display(fmt = "unauthorized: {}", message)]
+    Unauthorized { message: String },
 }
 
 impl ResponseError for ServiceError {
@@ -29,6 +32,7 @@ impl ResponseError for ServiceError {
             Self::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
             Self::BadRequest { .. } => StatusCode::BAD_REQUEST,
             Self::NotFound => StatusCode::NOT_FOUND,
+            Self::Unauthorized { .. } => StatusCode::UNAUTHORIZED,
         }
     }
 

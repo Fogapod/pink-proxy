@@ -1,4 +1,5 @@
 mod errors;
+//mod middlewares;
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -6,18 +7,20 @@ use std::time::{Duration, Instant};
 use tokio::{sync::Mutex, time};
 
 use actix_web::{get, post};
-use actix_web::{middleware, web, App, Error, HttpResponse, HttpServer, Responder, ResponseError};
+use actix_web::{
+    http::header, middleware, web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder,
+    ResponseError,
+};
 
 use serde::{Deserialize, Serialize};
 
 use uuid::Uuid;
 
+use constant_time_eq::constant_time_eq;
+
 use errors::ServiceError;
 
-const IGNORED_HEADERS: &[awc::http::HeaderName] = &[
-    awc::http::header::CONTENT_LENGTH,
-    awc::http::header::CONTENT_ENCODING,
-];
+const IGNORED_HEADERS: &[awc::http::HeaderName] = &[awc::http::header::CONTENT_LENGTH];
 
 #[derive(Deserialize)]
 struct ProxyURL {
@@ -40,11 +43,44 @@ struct Proxy {
 #[derive(Debug)]
 struct Proxies(Mutex<HashMap<Uuid, Proxy>>);
 
+fn authorize(rq: &HttpRequest) -> Result<(), ServiceError> {
+    let auth_header =
+        rq.headers()
+            .get(header::AUTHORIZATION)
+            .ok_or_else(|| ServiceError::Unauthorized {
+                message: "missing Authorization header".into(),
+            })?;
+
+    let token = auth_header
+        .to_str()
+        .map_err(|_| ServiceError::Unauthorized {
+            message: "bad Authorization header".into(),
+        })?
+        .strip_prefix("Bearer ")
+        .ok_or_else(|| ServiceError::Unauthorized {
+            message: "bad Bearer token format".into(),
+        })?;
+
+    // TODO: is it expensive? move to state?
+    let master_token = std::env::var("ACCESS_TOKEN").expect("ACCESS_TOKEN not set");
+
+    if constant_time_eq(token.as_bytes(), master_token.as_bytes()) {
+        return Err(ServiceError::Unauthorized {
+            message: "bad token".into(),
+        });
+    }
+
+    Ok(())
+}
+
 #[post("")]
 async fn post_proxy(
+    rq: HttpRequest,
     data: web::Json<ProxyURL>,
     proxies: web::Data<Proxies>,
 ) -> Result<impl Responder, Error> {
+    authorize(&rq)?;
+
     let ProxyURL { url, ttl } = data.into_inner();
 
     let id = Uuid::new_v4();
@@ -82,18 +118,23 @@ async fn get_proxy(
                 message: "bad id".into(),
             })?;
 
-    let request = client.get(proxy.url).send().await.map_err(|e| {
-        log::error!("remote request creation failed: {}", e);
+    let request = client
+        .get(proxy.url)
+        .no_decompress()
+        .send()
+        .await
+        .map_err(|e| {
+            log::error!("remote request creation failed: {}", e);
 
-        ServiceError::BadRequest {
-            message: "request failed".into(),
-        }
-    })?;
+            ServiceError::BadRequest {
+                message: "request failed".into(),
+            }
+        })?;
 
     let mut response = HttpResponse::build(request.status());
 
     for (k, v) in request.headers() {
-        // O(nm), though there are only 2 ignored headers now, so overhead is not big
+        // O(nm), though there are only a few ignored headers now, so overhead is not big
         if !IGNORED_HEADERS.contains(k) {
             response.insert_header((k, v.clone()));
         }

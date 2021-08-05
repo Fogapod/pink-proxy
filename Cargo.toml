@@ -11,8 +11,8 @@ env_logger = "0.9.0"
 log = "0.4"
 dotenv = "0.15.0"
 derive_more = "0.99.16"
-
 sentry = "0.23.0"
+constant_time_eq = "0.1.5"
 
 [dependencies.sentry-actix]
 # https://github.com/getsentry/sentry-rust/pull/316
