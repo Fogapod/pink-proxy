@@ -6,12 +6,12 @@ RequiresMountsFor=%t/containers
 
 [Service]
 Environment=PODMAN_SYSTEMD_UNIT=%n
-Environment=PWD=/srv/pink
+Environment=PWD=/srv/pink-proxy
 Environment="IMAGE=fogapod/pink-proxy"
 Restart=on-failure
 TimeoutStopSec=70
 ExecStartPre=/bin/rm -f %t/container-pink-proxy.service.pid %t/container-pink-proxy.service.ctr-id
-ExecStart=/usr/bin/podman run --conmon-pidfile %t/container-pink-proxy.service.pid --cidfile %t/container-pink-proxy.service.ctr-id --cgroups=no-conmon -d --replace --name %n --rm -p 8000:8000 -v ${PWD}/.env:/usr/src/pink-proxy/.env:U --hostname pink_proxy_prod $IMAGE
+ExecStart=/usr/bin/podman run --conmon-pidfile %t/container-pink-proxy.service.pid --cidfile %t/container-pink-proxy.service.ctr-id --cgroups=no-conmon --label "io.containers.autoupdate=registry" -d --replace --name %n --rm -p 8000:8000 -v ${PWD}/.env:/usr/src/pink-proxy/.env:U --hostname pink_proxy_prod $IMAGE
 ExecStop=/usr/bin/podman stop --ignore --cidfile %t/container-pink-proxy.service.ctr-id -t 10
 ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/container-pink-proxy.service.ctr-id
 PIDFile=%t/container-pink-proxy.service.pid
