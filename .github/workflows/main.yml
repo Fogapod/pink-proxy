@@ -6,7 +6,7 @@ on:
       - "*"
   push:
     branches:
-      - main
+      - master
 
 env:
   IMAGE_NAME: fogapod/pink-proxy
