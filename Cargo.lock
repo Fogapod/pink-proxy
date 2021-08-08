@@ -1074,6 +1074,7 @@ name = "pink-proxy"
 version = "0.0.1"
 dependencies = [
  "actix-rt",
+ "actix-service",
  "actix-web",
  "awc",
  "constant_time_eq",

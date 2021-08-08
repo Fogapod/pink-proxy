@@ -1,5 +1,9 @@
 mod errors;
-//mod middlewares;
+
+#[cfg(not(feature = "error_reporting"))]
+mod dummy_sentry;
+#[cfg(not(feature = "error_reporting"))]
+use dummy_sentry as sentry_actix;
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -158,6 +162,7 @@ async fn main() -> std::io::Result<()> {
 
     env_logger::init();
 
+    #[cfg(feature = "error_reporting")]
     let _guard = sentry::init((
         std::env::var("SENTRY_DSN").expect("SENTRY_DSN not set"),
         sentry::ClientOptions {
@@ -195,8 +200,11 @@ async fn main() -> std::io::Result<()> {
         });
 
         App::new()
-            .wrap(sentry_actix::Sentry::new())
             .wrap(logger)
+            .wrap(middleware::Condition::new(
+                cfg!(feature = "error_reporting"),
+                sentry_actix::Sentry::new(),
+            ))
             .app_data(json_config)
             .app_data(path_config)
             .app_data(web::Data::new(
@@ -221,11 +229,11 @@ async fn main() -> std::io::Result<()> {
 
             let now = Instant::now();
 
-            let mut proxies = proxies.0.lock().await;
-
-            // this is O(n) which is very very very bad, need to maintain a separate
-            // sorted set of valid instants probably
-            proxies.retain(|_, v| v.valid_until > now);
+            proxies.0.lock().await.retain(
+                // this is O(n) which is very very very bad, need to maintain a separate
+                // sorted set of valid instants probably
+                |_, v| v.valid_until > now,
+            );
         }
     });
 
