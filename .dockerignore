@@ -1,13 +1,4 @@
-target
-
-.github
-LICENSE
-README*
-.gitignore
-
-.dockerignore
-Dockerfile
-
-units
-
-*.env
+*
+!src/
+!Cargo.lock
+!Cargo.toml
