@@ -12,22 +12,22 @@ COPY ./Cargo.toml .
 RUN mkdir src \
     && echo 'fn main() {}' > src/main.rs \
     && apk update && apk add \
+    # required for compiling a lot of crates
     musl-dev \
-    && cargo install --features="$FEATURES" --path . \
-    && rm -rf target/release
+    # init system
+    dumb-init \
+    && cargo build --release --features="$FEATURES" \
+    && rm -f target/release/deps/pink_proxy*
 
 COPY src src
 
-RUN cargo install --features="$FEATURES" --path . \
-    && cp /usr/local/cargo/bin/pink-proxy pink-proxy \
+RUN cargo build --release --features="$FEATURES" \
+    && cp target/release/pink-proxy pink-proxy \
     && strip pink-proxy
-
-FROM alpine as dumb-init
-RUN apk update && apk add dumb-init
 
 FROM scratch
 
-COPY --from=dumb-init /usr/bin/dumb-init /bin/dumb-init
+COPY --from=builder /usr/bin/dumb-init /bin/dumb-init
 COPY --from=builder /build/pink-proxy /usr/bin/pink-proxy
 
 WORKDIR /app

@@ -25,7 +25,7 @@ features = ["atty", "humantime"]
 version = "0.23.0"
 optional = true
 default-features = false
-features = ["backtrace", "contexts", "panic", "rustls"]
+features = ["backtrace", "contexts", "panic", "reqwest", "rustls"]
 
 [dependencies.sentry-actix]
 # https://github.com/getsentry/sentry-rust/pull/316
