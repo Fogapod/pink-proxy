@@ -7,19 +7,25 @@ edition = "2018"
 
 [dependencies]
 serde = "1"
-env_logger = "0.9.0"
 dotenv = "0.15.0"
 derive_more = "0.99.16"
-
 constant_time_eq = "0.1.5"
+actix-service = "2.0.0"
 
 [dependencies.log]
 version = "0.4"
-features = ["release_max_level_warn"]
+features = ["release_max_level_info"]
+
+[dependencies.env_logger]
+version = "0.9.0"
+default_features = false
+features = ["atty", "humantime"]
 
 [dependencies.sentry]
 version = "0.23.0"
 optional = true
+default-features = false
+features = ["backtrace", "contexts", "panic", "rustls"]
 
 [dependencies.sentry-actix]
 # https://github.com/getsentry/sentry-rust/pull/316
@@ -30,9 +36,6 @@ optional = true
 [dependencies.actix-web]
 version = "4.0.0-beta"
 default-features = false
-
-[dependencies.actix-service]
-version = "2.0.0"
 
 [dependencies.awc]
 version = "3.0.0-beta"
@@ -53,6 +56,7 @@ features = ["time", "sync"]
 
 [features]
 error_reporting = ["sentry", "sentry-actix"]
+color = ["env_logger/termcolor"]
 
 [profile.dev]
 opt-level = 2
