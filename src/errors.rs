@@ -2,7 +2,7 @@ use actix_web::{error::ResponseError, http::StatusCode, HttpResponse, HttpRespon
 
 use serde::Serialize;
 
-use derive_more::{Display, Error};
+use derive_more::Display;
 
 #[derive(Serialize)]
 struct JsonError {
@@ -10,7 +10,7 @@ struct JsonError {
     message: String,
 }
 
-#[derive(Debug, Display, Error)]
+#[derive(Debug, Display)]
 pub enum ServiceError {
     #[display(fmt = "not found")]
     NotFound,

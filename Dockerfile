@@ -1,4 +1,14 @@
-FROM rust:1.54-alpine as builder
+FROM alpine as builder
+
+RUN apk upgrade && apk add \
+    # rustup
+    curl \
+    gcc \
+    # required for compiling a lot of crates
+    musl-dev \
+    # init system
+    dumb-init \
+    && curl https://sh.rustup.rs -sSf | sh -s -- --profile minimal --default-toolchain nightly -y
 
 ARG FEATURES="error_reporting"
 
@@ -11,19 +21,15 @@ COPY ./Cargo.toml .
 # https://github.com/twilight-rs/http-proxy/blob/f7ea681fa4c47b59692827974cd3a7ceb2125161/Dockerfile#L40-L75
 RUN mkdir src \
     && echo 'fn main() {}' > src/main.rs \
-    && apk update && apk add \
-    # required for compiling a lot of crates
-    musl-dev \
-    # init system
-    dumb-init \
+    && source $HOME/.cargo/env \
     && cargo build --release --features="$FEATURES" \
     && rm -f target/release/deps/pink_proxy*
 
 COPY src src
 
-RUN cargo build --release --features="$FEATURES" \
-    && cp target/release/pink-proxy pink-proxy \
-    && strip pink-proxy
+RUN source $HOME/.cargo/env \
+    && cargo build --release --features="$FEATURES" \
+    && cp target/release/pink-proxy pink-proxy
 
 FROM scratch
 

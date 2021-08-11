@@ -1,3 +1,5 @@
+cargo-features = ["strip"]
+
 [package]
 name = "pink-proxy"
 version = "0.0.1"
@@ -8,9 +10,13 @@ edition = "2018"
 [dependencies]
 serde = "1"
 dotenv = "0.15.0"
-derive_more = "0.99.16"
 constant_time_eq = "0.1.5"
 actix-service = "2.0.0"
+
+[dependencies.derive_more]
+version = "0.99.16"
+default-features = false
+features = ["display"]
 
 [dependencies.log]
 version = "0.4"
@@ -57,6 +63,12 @@ features = ["time", "sync"]
 [features]
 error_reporting = ["sentry", "sentry-actix"]
 color = ["env_logger/termcolor"]
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true
+panic = 'abort'
 
 [profile.dev]
 opt-level = 2
