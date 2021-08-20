@@ -30,7 +30,8 @@ async fn main() -> std::io::Result<()> {
     ));
 
     let server = HttpServer::new(move || {
-        let logger = middleware::Logger::default();
+        let logger =
+            middleware::Logger::new("%{r}a \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T");
 
         let json_config = web::JsonConfig::default()
             .limit(4096)
